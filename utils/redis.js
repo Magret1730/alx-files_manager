@@ -17,7 +17,7 @@ class RedisClient {
     this.getAsync = promisify(this.client.get).bind(this.client);
     this.setAsync = promisify(this.client.set).bind(this.client);
     this.delAsync = promisify(this.client.del).bind(this.client);
-    this.pingAsync = promisify(this.client.ping).bind(this.client);
+    // this.pingAsync = promisify(this.client.ping).bind(this.client);
   }
 
   isAlive() {
