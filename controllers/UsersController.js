@@ -1,4 +1,6 @@
 import sha1 from 'sha1';
+import { ObjectId } from 'mongodb';
+import redisClient from '../utils/redis';
 import dbClient from '../utils/db';
 
 class UsersController {
@@ -33,6 +35,42 @@ class UsersController {
       return res.status(201).json({
         id: newUser.insertedId,
         email,
+      });
+    } catch (error) {
+      return res.status(500).json({ error: error.message });
+    }
+  }
+
+  static async getMe(req, res) {
+    // console.log('req.headers getMe: ', req.headers);
+    const token = req.headers['x-token'];
+    // console.log(`Token getMe: ${token}`);
+    if (!token) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const key = `auth_${token}`;
+    // console.log(`Key getMe: ${key}`);
+
+    try {
+      const userId = await redisClient.getAsync(key);
+      // console.log(`userId getMe: ${userId}`);
+
+      if (!userId) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      const database = dbClient.client.db(dbClient.databaseName);
+      const users = database.collection('users');
+      const user = await users.findOne({ _id: new ObjectId(userId) });
+      // console.log(`users getMe: ${user}`);
+      if (!user) {
+        return res.status(401).json({ error: 'Unauthorizedd' });
+      }
+
+      return res.status(201).json({
+        id: user._id,
+        email: user.email,
       });
     } catch (error) {
       return res.status(500).json({ error: error.message });
