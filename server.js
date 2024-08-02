@@ -9,6 +9,10 @@ import indexRoutes from './routes/index';
 
 const app = express();
 
+// Body Parser middleware
+app.use(express.json());
+app.use(express.urlencoded({ extended: false }));
+
 // Use the routes
 app.use('/', indexRoutes);
 
