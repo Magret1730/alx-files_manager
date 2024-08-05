@@ -1,11 +1,10 @@
+import mime from 'mime-types';
 import { v4 as uuidv4 } from 'uuid';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { ObjectId } from 'mongodb';
 import redisClient from '../utils/redis';
 import dbClient from '../utils/db';
-// import { getMe } from UsersController;
-// import UsersController from './UsersController';
 
 class FilesController {
   static async postUpload(req, res) {
@@ -256,6 +255,56 @@ class FilesController {
       });
 
       return res.status(200).json(updatedFileDocument);
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  static async getFile(req, res) {
+    const token = req.headers['x-token'];
+    if (!token) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { id } = req.params;
+
+    try {
+      const userId = await redisClient.getAsync(`auth_${token}`);
+      // console.log(`USERID from getShow: ${userId}`);
+      if (!userId) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      const database = dbClient.client.db(dbClient.databaseName);
+      const files = database.collection('files');
+
+      const fileDocument = await files.findOne({
+        _id: new ObjectId(id),
+        userId: new ObjectId(userId),
+      });
+
+      if (!fileDocument) {
+        return res.status(404).json({ error: 'Not Found' });
+      }
+
+      if (fileDocument.isPublic === false) {
+        return res.status(404).json({ error: 'Not Found' });
+      }
+
+      if (fileDocument.type === 'folder') {
+        return res.status(400).json({ error: "A folder doesn't have content" });
+      }
+
+      const filePath = `/tmp/files_manager/${fileDocument.localPath}`;
+      if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ error: 'Not Found' });
+      }
+
+      const mimeType = mime.lookup(fileDocument.name);
+      res.setHeader('Content-Type', mimeType);
+      // const data = fs.readFile(filePath);
+      const fileStream = fs.createReadStream(filePath);
+      return fileStream.pipe(res);
     } catch (err) {
       return res.status(500).json({ error: err.message });
     }
