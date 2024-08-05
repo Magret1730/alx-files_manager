@@ -4,6 +4,8 @@ import path from 'path';
 import { ObjectId } from 'mongodb';
 import redisClient from '../utils/redis';
 import dbClient from '../utils/db';
+// import { getMe } from UsersController;
+// import UsersController from './UsersController';
 
 class FilesController {
   static async postUpload(req, res) {
@@ -91,24 +93,6 @@ class FilesController {
       const newFile = await files.insertOne(fileDocument);
       fileDocument.id = newFile.insertedId;
 
-      // const {
-      //   id,
-      //   userId: userIdResponse,
-      //   name: nameResponse,
-      //   type: typeResponse,
-      //   isPublic: isPublicResponse,
-      //   parentId: parentIdResponse,
-      // } = fileDocument;
-
-      // return res.status(201).json(newFile.ops[0]);
-      // return res.status(201).json({
-      //   id,
-      //   userId: userIdResponse,
-      //   name: nameResponse,
-      //   type: typeResponse,
-      //   isPublic: isPublicResponse,
-      //   parentId: parentIdResponse,
-      // });
       return res.status(201).json({
         id: newFile.insertedId,
         userId,
@@ -117,6 +101,75 @@ class FilesController {
         isPublic,
         parentId: fileDocument.parentId,
       });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  static async getShow(req, res) {
+    const token = req.headers['x-token'];
+    if (!token) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { id } = req.params;
+    console.log(`ID from getShow: ${id}`);
+
+    try {
+      const userId = await redisClient.getAsync(`auth_${token}`);
+      console.log(`USERID from getShow: ${userId}`);
+      if (!userId) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      const database = dbClient.client.db(dbClient.databaseName);
+      const files = database.collection('files');
+
+      const fileDocument = await files.findOne({
+        _id: new ObjectId(id),
+        userId: new ObjectId(userId),
+      });
+      // console.log(`_id from getShow: ${_id} and userId from getShow: ${userId}`);
+
+      if (!fileDocument) {
+        return res.status(404).json({ error: 'Not Found' });
+      }
+
+      return res.status(200).json(fileDocument);
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  static async getIndex(req, res) {
+    const token = req.headers['x-token'];
+    if (!token) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { parentId = '0', page = '0' } = req.query;
+
+    try {
+      const userId = await redisClient.getAsync(`auth_${token}`);
+      console.log(`USERID from getShow: ${userId}`);
+      if (!userId) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      const database = dbClient.client.db(dbClient.databaseName);
+      const files = database.collection('files');
+
+      const query = {
+        userId: new ObjectId(userId),
+        parentId: parentId === '0' ? 0 : new ObjectId(parentId),
+      };
+
+      const limit = 20;
+      const skip = parseInt(page, 10) * limit;
+
+      const fileDocument = await files.find(query).skip(skip).limit(limit).toArray();
+
+      return res.status(200).json(fileDocument);
     } catch (err) {
       return res.status(500).json({ error: err.message });
     }
