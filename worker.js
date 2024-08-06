@@ -41,6 +41,27 @@ fileQueue.process(async (job) => {
   }
 });
 
+// Define and configure userQueue
+const userQueue = new Bull('userQueue');
+
+userQueue.process(async (job) => {
+  const { userId } = job.data;
+
+  if (!userId) throw new Error('Missing userId');
+
+  const database = dbClient.client.db(dbClient.databaseName);
+  const users = database.collection('users');
+
+  const user = await users.findOne({ _id: new ObjectId(userId) });
+
+  if (!user) throw new Error('User not found');
+
+  console.log(`Welcome ${user.email}!`);
+
+  // In a real scenario, you might use a service like Mailgun to send an email
+  // Example: await mailgunClient.messages.create(...);
+});
+
 fileQueue.on('completed', (job) => {
   console.log(`Job with id ${job.id} has been completed`);
 });
@@ -48,3 +69,13 @@ fileQueue.on('completed', (job) => {
 fileQueue.on('failed', (job, err) => {
   console.error(`Job with id ${job.id} has failed with error ${err.message}`);
 });
+
+userQueue.on('completed', (job) => {
+  console.log(`User job with id ${job.id} has been completed`);
+});
+
+userQueue.on('failed', (job, err) => {
+  console.error(`User job with id ${job.id} has failed with error ${err.message}`);
+});
+
+console.log('Worker is running...');

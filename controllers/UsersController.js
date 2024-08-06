@@ -1,7 +1,11 @@
+import Bull from 'bull';
 import sha1 from 'sha1';
 import { ObjectId } from 'mongodb';
 import redisClient from '../utils/redis';
 import dbClient from '../utils/db';
+
+// Create a new Bull queue
+const userQueue = new Bull('userQueue');
 
 class UsersController {
   static async postNew(req, res) {
@@ -31,6 +35,9 @@ class UsersController {
       const newUser = await users.insertOne({
         email, password: hashedPassword,
       });
+
+      // Add a job to the userQueue for sending a welcome email
+      userQueue.add({ userId: newUser.insertedId.toString() });
 
       return res.status(201).json({
         id: newUser.insertedId,

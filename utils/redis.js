@@ -27,7 +27,7 @@ class RedisClient {
   async get(key) {
     // this.getAsync = promisify(this.client.get).bind(this.client);
     try {
-      const value = this.getAsync(key);
+      const value = await this.getAsync(key);
       return value;
     } catch (err) {
       return (`Can't get ${key}: ${err.message}`);
@@ -47,7 +47,7 @@ class RedisClient {
   async del(key) {
     // this.delAsync = promisify(this.client.del).bind(this.client);
     try {
-      return this.delAsync(key);
+      return await this.delAsync(key);
     } catch (err) {
       return (`Can't delete ${key}: ${err.message}`);
     }
