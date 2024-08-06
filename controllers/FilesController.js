@@ -1,6 +1,7 @@
 import mime from 'mime-types';
 import { v4 as uuidv4 } from 'uuid';
-import { promises as fs } from 'fs';
+// import { promises as fs } from 'fs';
+import { promises as fs, createReadStream } from 'fs';
 import path from 'path';
 import { ObjectId } from 'mongodb';
 import redisClient from '../utils/redis';
@@ -112,11 +113,11 @@ class FilesController {
     }
 
     const { id } = req.params;
-    console.log(`ID from getShow: ${id}`);
+    // console.log(`ID from getShow: ${id}`);
 
     try {
       const userId = await redisClient.getAsync(`auth_${token}`);
-      console.log(`USERID from getShow: ${userId}`);
+      // console.log(`USERID from getShow: ${userId}`);
       if (!userId) {
         return res.status(401).json({ error: 'Unauthorized' });
       }
@@ -150,7 +151,7 @@ class FilesController {
 
     try {
       const userId = await redisClient.getAsync(`auth_${token}`);
-      console.log(`USERID from getShow: ${userId}`);
+      // console.log(`USERID from getShow: ${userId}`);
       if (!userId) {
         return res.status(401).json({ error: 'Unauthorized' });
       }
@@ -184,7 +185,7 @@ class FilesController {
 
     try {
       const userId = await redisClient.getAsync(`auth_${token}`);
-      console.log(`USERID from getShow: ${userId}`);
+      // console.log(`USERID from getShow: ${userId}`);
       if (!userId) {
         return res.status(401).json({ error: 'Unauthorized' });
       }
@@ -227,7 +228,7 @@ class FilesController {
 
     try {
       const userId = await redisClient.getAsync(`auth_${token}`);
-      console.log(`USERID from getShow: ${userId}`);
+      // console.log(`USERID from getShow: ${userId}`);
       if (!userId) {
         return res.status(401).json({ error: 'Unauthorized' });
       }
@@ -295,15 +296,41 @@ class FilesController {
         return res.status(400).json({ error: "A folder doesn't have content" });
       }
 
-      const filePath = `/tmp/files_manager/${fileDocument.localPath}`;
-      if (!fs.existsSync(filePath)) {
-        return res.status(404).json({ error: 'Not Found' });
+      const filePath = fileDocument.localPath;
+      // const filePath = `/tmp/files_manager/${fileDocument.localPath}`;
+      // const filePath = `${fileDocument.localPath}`;
+      // console.log(`FilePath: ${filePath}`);
+      // if (!fs.existsSync(filePath)) {
+      //   return res.status(404).json({ errorsss: 'Not Found' });
+      // }
+      // try {
+      //   const data = await fs.access(filePath);
+      // } catch (err) {
+      //   return res.status(404).json({ error: err.message });
+      // }
+
+      // const mimeType = mime.lookup(fileDocument.name);
+      // res.setHeader('Content-Type', mimeType);
+      // // console.log(`Res: ${res}`);
+      // const fileStream = createReadStream(filePath);
+      // console.log(fileStream);
+      // return fileStream.pipe(res);
+      // const data = await fs.promises.readFile(filePath);
+      // const data = await fs.access(filePath);
+      // const headerContentType = mime.contentType(fileDocument.name);
+      // return res.header('Content-Type', headerContentType).status(200).send(data);
+
+      const mimeType = mime.lookup(fileDocument.name) || 'application/octet-stream';
+      res.setHeader('Content-Type', mimeType);
+
+      // Check if the file is a text file and read its content
+      if (mimeType.startsWith('text/')) {
+        const data = await fs.readFile(filePath, 'utf-8');
+        return res.send(data);
       }
 
-      const mimeType = mime.lookup(fileDocument.name);
-      res.setHeader('Content-Type', mimeType);
-      // const data = fs.readFile(filePath);
-      const fileStream = fs.createReadStream(filePath);
+      // For binary files, stream the content
+      const fileStream = createReadStream(filePath);
       return fileStream.pipe(res);
     } catch (err) {
       return res.status(500).json({ error: err.message });
