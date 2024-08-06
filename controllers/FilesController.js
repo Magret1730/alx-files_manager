@@ -1,11 +1,13 @@
 import mime from 'mime-types';
 import { v4 as uuidv4 } from 'uuid';
-// import { promises as fs } from 'fs';
+import Bull from 'bull';
 import { promises as fs, createReadStream } from 'fs';
 import path from 'path';
 import { ObjectId } from 'mongodb';
 import redisClient from '../utils/redis';
 import dbClient from '../utils/db';
+
+const fileQueue = new Bull('fileQueue');
 
 class FilesController {
   static async postUpload(req, res) {
@@ -93,6 +95,11 @@ class FilesController {
       const newFile = await files.insertOne(fileDocument);
       fileDocument.id = newFile.insertedId;
 
+      // If the file is an image, add a job to the queue
+      if (fileDocument.type === 'image') {
+        fileQueue.add({ userId, fileId: newFile.insertedId });
+      }
+
       return res.status(201).json({
         id: newFile.insertedId,
         userId,
@@ -126,7 +133,7 @@ class FilesController {
       const files = database.collection('files');
 
       const fileDocument = await files.findOne({
-        _id: new ObjectId(id),
+        id: new ObjectId(id),
         userId: new ObjectId(userId),
       });
       // console.log(`_id from getShow: ${_id} and userId from getShow: ${userId}`);
@@ -194,7 +201,7 @@ class FilesController {
       const files = database.collection('files');
 
       const fileDocument = await files.findOne({
-        _id: new ObjectId(id),
+        id: new ObjectId(id),
         userId: new ObjectId(userId),
       });
 
@@ -203,12 +210,12 @@ class FilesController {
       }
 
       await files.updateOne(
-        { _id: new ObjectId(id) },
+        { id: new ObjectId(id) },
         { $set: { isPublic: true } },
       );
 
       const updatedFileDocument = await files.findOne({
-        _id: new ObjectId(id),
+        id: new ObjectId(id),
         userId: new ObjectId(userId),
       });
 
@@ -237,7 +244,7 @@ class FilesController {
       const files = database.collection('files');
 
       const fileDocument = await files.findOne({
-        _id: new ObjectId(id),
+        id: new ObjectId(id),
         userId: new ObjectId(userId),
       });
 
@@ -246,12 +253,12 @@ class FilesController {
       }
 
       await files.updateOne(
-        { _id: new ObjectId(id) },
+        { id: new ObjectId(id) },
         { $set: { isPublic: false } },
       );
 
       const updatedFileDocument = await files.findOne({
-        _id: new ObjectId(id),
+        id: new ObjectId(id),
         userId: new ObjectId(userId),
       });
 
@@ -268,6 +275,13 @@ class FilesController {
     }
 
     const { id } = req.params;
+    const { size } = req.query;
+
+    // Validate the size parameter
+    const validSizes = ['500', '250', '100'];
+    if (size && !validSizes.includes(size)) {
+      return res.status(400).json({ error: 'Invalid size parameter' });
+    }
 
     try {
       const userId = await redisClient.getAsync(`auth_${token}`);
@@ -280,7 +294,7 @@ class FilesController {
       const files = database.collection('files');
 
       const fileDocument = await files.findOne({
-        _id: new ObjectId(id),
+        id: new ObjectId(id),
         userId: new ObjectId(userId),
       });
 
@@ -296,29 +310,18 @@ class FilesController {
         return res.status(400).json({ error: "A folder doesn't have content" });
       }
 
-      const filePath = fileDocument.localPath;
-      // const filePath = `/tmp/files_manager/${fileDocument.localPath}`;
-      // const filePath = `${fileDocument.localPath}`;
-      // console.log(`FilePath: ${filePath}`);
-      // if (!fs.existsSync(filePath)) {
-      //   return res.status(404).json({ errorsss: 'Not Found' });
-      // }
-      // try {
-      //   const data = await fs.access(filePath);
-      // } catch (err) {
-      //   return res.status(404).json({ error: err.message });
-      // }
-
-      // const mimeType = mime.lookup(fileDocument.name);
-      // res.setHeader('Content-Type', mimeType);
-      // // console.log(`Res: ${res}`);
-      // const fileStream = createReadStream(filePath);
-      // console.log(fileStream);
-      // return fileStream.pipe(res);
-      // const data = await fs.promises.readFile(filePath);
-      // const data = await fs.access(filePath);
-      // const headerContentType = mime.contentType(fileDocument.name);
-      // return res.header('Content-Type', headerContentType).status(200).send(data);
+      // const filePath = fileDocument.localPath;
+      // Determine the localPath based on the size parameter
+      let filePath = fileDocument.localPath;
+      if (size) {
+        const filePathWithSize = path.join(path.dirname(filePath), `${path.basename(filePath)}_${size}`);
+        try {
+          await fs.access(filePathWithSize);
+          filePath = filePathWithSize;
+        } catch (err) {
+          return res.status(404).json({ error: 'Not Found' });
+        }
+      }
 
       const mimeType = mime.lookup(fileDocument.name) || 'application/octet-stream';
       res.setHeader('Content-Type', mimeType);

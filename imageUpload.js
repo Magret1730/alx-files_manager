@@ -9,7 +9,7 @@ const fileName = path.basename(filePath);
 
 fs.readFile(filePath, { encoding: 'base64' }, (err, fileEncoded) => {
   if (err) {
-    console.error('Error reading file:', err);
+    console.error('Error reading file:', err.message);
     return;
   }
 
@@ -28,6 +28,6 @@ fs.readFile(filePath, { encoding: 'base64' }, (err, fileEncoded) => {
       console.log(response.data);
     })
     .catch((error) => {
-      console.error('Error uploading file:', error);
+      console.error('Error uploading file:', error.message);
     });
 });
